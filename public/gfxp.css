@@ -94,8 +94,8 @@
 .gfxp .cuttools{display:grid;gap:14px;padding:14px 16px;border-top:1px solid var(--line2)}
 .gfxp .seg{display:grid;gap:6px}
 .gfxp .seg>span,.gfxp .cuttools label.rng{font:700 10.5px var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--ink2)}
-.gfxp .seg>div{display:flex;gap:6px}
-.gfxp .seg button{flex:1 1 0;min-height:40px;padding:0 6px;border:1px solid #3a3a3a;border-radius:8px;background:#000;color:var(--ink);font:700 10.5px var(--mono);letter-spacing:.1em;text-transform:uppercase}
+.gfxp .seg>div{display:flex;flex-wrap:wrap;gap:6px}
+.gfxp .seg button{flex:1 1 auto;min-height:40px;padding:0 6px;border:1px solid #3a3a3a;border-radius:8px;background:#000;color:var(--ink);font:700 10.5px var(--mono);letter-spacing:.1em;text-transform:uppercase}
 .gfxp .seg button[aria-pressed=true]{background:var(--lime);border-color:var(--lime);color:#000}
 .gfxp .cuttools label.rng{display:grid;gap:6px}
 .gfxp .cuttools input[type=range]{width:100%;accent-color:var(--lime)}

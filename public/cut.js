@@ -1,7 +1,7 @@
 // Background remover for the result panel.
-// It turns a scan into ink on transparency: the paper becomes see-through and
-// what was printed on it becomes a single ink colour. All of the work happens in
-// the visitor's browser; nothing is uploaded or stored.
+// It removes the background of a scan: the background becomes see-through and
+// what was printed on it stays, in its own colours or as a single ink colour.
+// All of the work happens in the visitor's browser; nothing is uploaded or stored.
 // Works best on prints, engravings and drawings. It does not cut a subject out
 // of a painting or a photo.
 (() => {
@@ -9,7 +9,7 @@
   const EXPORT_MAX = 4000;
   const INKS = { Black: [0, 0, 0], White: [241, 241, 241], Lime: [220, 239, 111] };
   // The preview backdrop that shows each ink best.
-  const BACK_FOR_INK = { Black: 'White', White: 'Black', Lime: 'Black' };
+  const BACK_FOR_INK = { Original: 'Grid', Black: 'White', White: 'Black', Lime: 'Black' };
   const el = (tag, props = {}, kids = []) => { const n = Object.assign(document.createElement(tag), props); kids.forEach((k) => n.append(k)); return n; };
   const ORIGIN = document.currentScript ? new URL(document.currentScript.src).origin : '';
   const proxied = (u) => ORIGIN + '/api/img?u=' + encodeURIComponent(u);
@@ -33,31 +33,60 @@
     });
   }
 
-  // Find how bright the paper is and how dark the ink is, so a cream page and
-  // a faded print are both stretched to a full paper-to-ink range.
-  function levels(d) {
+  // Measure the image: how bright the background is, how dark the art is, and
+  // the background's actual colour (old pages are cream or brown, not white).
+  // `invert` is for light art on a dark background, where the roles swap.
+  function measure(d, invert) {
     const hist = new Uint32Array(256);
     let total = 0;
-    for (let i = 0; i < d.length; i += 16) { hist[(d[i] * 299 + d[i + 1] * 587 + d[i + 2] * 114) / 1000 | 0]++; total++; }
+    const lumAt = (i) => (d[i] * 299 + d[i + 1] * 587 + d[i + 2] * 114) / 1000;
+    for (let i = 0; i < d.length; i += 16) { hist[lumAt(i) | 0]++; total++; }
     const at = (frac) => { let run = 0; for (let v = 0; v < 256; v++) { run += hist[v]; if (run >= total * frac) return v; } return 255; };
-    return { ink: at(0.04), paper: at(0.9) };
+    const dark = at(0.04), light = at(0.9);
+    // Average the pixels that sit at the background's brightness.
+    let r = 0, g = 0, b = 0, n = 0;
+    for (let i = 0; i < d.length; i += 16) {
+      const l = lumAt(i);
+      if (invert ? l <= dark + 6 : l >= light - 6) { r += d[i]; g += d[i + 1]; b += d[i + 2]; n++; }
+    }
+    const back = n ? [r / n, g / n, b / n] : (invert ? [0, 0, 0] : [255, 255, 255]);
+    return { dark, light, range: Math.max(1, light - dark), back };
   }
 
   function knock(src, o) {
     const d = src.data;
     const out = new ImageData(src.width, src.height);
     const p = out.data;
-    const { ink, paper } = levels(d);
-    const range = Math.max(1, paper - ink);
+    const { light, dark, range, back } = measure(d, o.invert);
     const cut = o.cutoff / 100;
-    const [r, g, b] = INKS[o.ink];
+    const keep = o.ink === 'Original';
+    const [r, g, b] = keep ? [0, 0, 0] : INKS[o.ink];
+    const backLum = (back[0] * 299 + back[1] * 587 + back[2] * 114) / 1000;
     for (let i = 0; i < d.length; i += 4) {
       const lum = (d[i] * 299 + d[i + 1] * 587 + d[i + 2] * 114) / 1000;
-      let t = (paper - lum) / range;
+      let t;
+      if (keep) {
+        // How far this pixel is from the background, by brightness or by
+        // colour, whichever is larger. Colour matters for light inks: a pale
+        // yellow is nearly as bright as the page but clearly a different colour.
+        const byColour = Math.max(Math.abs(d[i] - back[0]), Math.abs(d[i + 1] - back[1]), Math.abs(d[i + 2] - back[2]));
+        t = Math.max(Math.abs(lum - backLum), byColour) / range;
+      } else {
+        t = o.invert ? (lum - dark) / range : (light - lum) / range;
+      }
       t = t < 0 ? 0 : t > 1 ? 1 : t;
-      if (o.invert) t = 1 - t;
       const a = o.mode === 'Hard' ? (t > cut ? 1 : 0) : (t <= cut ? 0 : (t - cut) / (1 - cut));
-      p[i] = r; p[i + 1] = g; p[i + 2] = b; p[i + 3] = Math.round(a * (d[i + 3] / 255) * 255);
+      if (keep && a > 0) {
+        // Each pixel is the art mixed with the background showing through.
+        // Take the background's share back out so the colours come up clean
+        // on any shirt colour, without the page's tint.
+        const m = Math.max(a, 0.15);
+        for (let c = 0; c < 3; c++) {
+          const v = (d[i + c] - (1 - m) * back[c]) / m;
+          p[i + c] = v < 0 ? 0 : v > 255 ? 255 : v;
+        }
+      } else { p[i] = r; p[i + 1] = g; p[i + 2] = b; }
+      p[i + 3] = Math.round(a * (d[i + 3] / 255) * 255);
     }
     if (o.mode === 'Halftone') halftone(out);
     return out;
@@ -107,7 +136,7 @@
     const orig = panel && panel.querySelector('img');
     if (!orig) return;
     const mine = ++job;
-    const o = { mode: 'Soft', cutoff: 25, ink: 'Black', back: BACK_FOR_INK.Black, invert: false };
+    const o = { mode: 'Soft', cutoff: 25, ink: 'Original', back: BACK_FOR_INK.Original, invert: false };
     let src = null;
 
     const canvas = el('canvas');
@@ -149,13 +178,13 @@
     });
 
     const backSeg = seg('Preview on', ['Grid', 'Black', 'White'], o.back, (v) => { o.back = v; draw(); });
-    const inkSeg = seg('Ink colour', Object.keys(INKS), o.ink, (v) => { o.ink = v; o.back = BACK_FOR_INK[v]; backSeg.set(o.back); draw(); });
+    const inkSeg = seg('Colour', ['Original', ...Object.keys(INKS)], o.ink, (v) => { o.ink = v; o.back = BACK_FOR_INK[v]; backSeg.set(o.back); draw(); });
     const tools = el('div', { className: 'cuttools', hidden: true }, [
       seg('Style', ['Soft', 'Hard', 'Halftone'], o.mode, (v) => { o.mode = v; draw(); }).node,
-      el('label', { className: 'rng' }, ['How much paper to remove', range]),
+      el('label', { className: 'rng' }, ['How much background to remove', range]),
       inkSeg.node,
       backSeg.node,
-      el('label', { className: 'chk' }, [inv, 'Art is light on dark']),
+      el('label', { className: 'chk' }, [inv, 'Background is dark']),
       save,
       status,
     ]);

@@ -15,6 +15,8 @@ const GFX_MARKUP = `
     </form>
   </section>
 
+  <div class="chiprow" id="chiprow" hidden><span class="lbl dim" id="chiplbl"></span><div class="chips" id="chips"></div></div>
+
   <div class="layout">
     <details class="panel filters" id="filters" open>
       <summary class="ph"><i></i>FILTERS<span class="spacer"></span><span id="fcount" class="lime"></span></summary>
@@ -32,7 +34,8 @@ const GFX_MARKUP = `
       </section>
 
       <section id="results" class="stack" hidden>
-        <div class="bar"><h2 id="rt"></h2><button type="button" class="btn g small" id="back">&larr;&nbsp; All crates</button></div>
+        <div class="bar"><h2 id="rt"></h2><span class="tools"><button type="button" class="btn g small" id="view" aria-pressed="false">Wall view</button><button type="button" class="btn g small" id="back">&larr;&nbsp; All crates</button></span></div>
+        <div class="trail" id="trail" hidden><span class="lbl dim">Trail</span><div id="trailrow"></div></div>
         <p class="lbl dim" id="status" aria-live="polite"></p>
         <div class="cols">
           <div class="grid" id="grid"></div>
@@ -119,6 +122,82 @@ function renderFilters() {
   $('reset').hidden = active === 0;
 }
 
+// Chips under the search box. On the home page they are starting points; after
+// a search they are ways to go deeper, drawn from what came back: the makers
+// and kinds of work that turn up more than once.
+let starters = [];
+function chip(label, image, go) {
+  const b = el('button', { type: 'button', className: 'chip' });
+  if (image) b.append(thumb({ thumb: image }, 384, {}, (img) => img.remove()));
+  b.append(el('span', { textContent: label }));
+  b.addEventListener('click', go);
+  return b;
+}
+function relatedChips() {
+  const makers = new Map(), kinds = new Map();
+  const add = (map, key, it) => { const e = map.get(key) || { n: 0, it }; e.n++; map.set(key, e); };
+  for (const it of state.items) {
+    const m = String(it.maker || '').split('(')[0].trim();
+    if (m && m.length < 40 && !/unknown|anonymous|artist/i.test(m)) add(makers, m, it);
+    const k = String(it.type || '').trim();
+    if (k && k.length < 28) add(kinds, k, it);
+  }
+  const top = (map, max) => [...map.entries()].filter(([, e]) => e.n >= 2).sort((a, b) => b[1].n - a[1].n).slice(0, max);
+  const q = state.q.toLowerCase();
+  return [
+    ...top(makers, 4).filter(([m]) => m.toLowerCase() !== q).map(([m, e]) => chip(m, e.it.thumb, () => { run(m); toTop(); })),
+    ...top(kinds, 4).filter(([k]) => !q.includes(k.toLowerCase())).map(([k, e]) => chip(state.q + ' / ' + k, e.it.thumb, () => { run(state.q + ' ' + k, state.q + ' / ' + k); toTop(); })),
+  ];
+}
+function renderChips() {
+  const home = $('results').hidden;
+  const list = home ? starters.map((c) => chip(c.label, c.thumb, () => { run(c.q, c.label); toTop(); })) : relatedChips();
+  $('chiplbl').textContent = home ? 'Try' : 'Go deeper';
+  $('chips').replaceChildren(...list);
+  $('chiprow').hidden = list.length === 0;
+}
+async function loadChips() {
+  try {
+    const r = await fetch(api('/api/chips'));
+    const data = await r.json();
+    starters = (data.chips || []).filter((c) => c.q);
+    renderChips();
+  } catch (e) { /* the page works without them */ }
+}
+
+// The trail: the images opened so far, newest first, so a find is never lost
+// while following chips into other searches.
+const trail = [];
+function renderTrail() {
+  $('trail').hidden = trail.length < 2;
+  $('trailrow').replaceChildren(...trail.map((t) => {
+    const b = el('button', { type: 'button', className: 'crumb', title: t.it.title });
+    b.setAttribute('aria-label', 'Back to ' + t.it.title);
+    b.append(thumb(t.it, 384, {}, () => b.remove()));
+    b.addEventListener('click', () => {
+      if (state.q === t.q && cards.get(t.it.id)) showDetail(t.it, cards.get(t.it.id));
+      else run(t.q, t.label, t.it.id);
+    });
+    return b;
+  }));
+}
+function remember(it) {
+  const at = trail.findIndex((t) => t.it.id === it.id);
+  if (at >= 0) trail.splice(at, 1);
+  trail.unshift({ it, q: state.q, label: $('rt').textContent });
+  if (trail.length > 10) trail.pop();
+  renderTrail();
+}
+
+// Wall view: images only, edge to edge, captions on hover. The choice is kept
+// for next time where the browser allows it.
+function setWall(on) {
+  gfxRoot.classList.toggle('wall', on);
+  $('view').setAttribute('aria-pressed', String(on));
+  $('view').textContent = on ? 'Grid view' : 'Wall view';
+  try { localStorage.setItem('gfxp-wall', on ? '1' : '0'); } catch (e) { /* not kept, still works */ }
+}
+
 function showDetail(it, card) {
   document.querySelectorAll('.gfxp .card').forEach((c) => c.setAttribute('aria-pressed', c === card ? 'true' : 'false'));
   const known = it.width && it.height;
@@ -152,6 +231,7 @@ function showDetail(it, card) {
   );
   $('detail').hidden = false;
   setAddress(it.id);
+  remember(it);
   // Some archives do not say how big their files are, so the file is measured.
   // The answer is kept on the item, which also lets the Print ready filter see it.
   fetch(api('/api/size?u=' + encodeURIComponent(it.image))).then((r) => (r.ok ? r.json() : null)).then((s) => {
@@ -193,13 +273,14 @@ function renderGrid() {
   else if (state.items.length) $('msg').hidden = true;
 }
 
-function update() { renderFilters(); renderGrid(); }
+function update() { renderFilters(); renderGrid(); renderChips(); }
 
 function goHome() {
   state.items = []; state.q = ''; state.page = 0; state.more = false;
   $('results').hidden = true; $('home').hidden = false; $('q').value = '';
   setAddress(null);
   renderFilters();
+  renderChips();
   toTop();
 }
 
@@ -220,6 +301,7 @@ async function run(q, label, openId) {
   $('msg').hidden = false; $('msg').textContent = 'Searching the archives';
   $('grid').replaceChildren(); $('detail').hidden = true; $('more').hidden = true;
   renderFilters();
+  renderChips();
   try {
     const data = await fetchPage(q, 0);
     if (state.q !== q) return;
@@ -300,11 +382,14 @@ async function loadHome() {
 $('f').addEventListener('submit', (e) => { e.preventDefault(); const q = $('q').value.trim(); if (q) run(q); });
 $('back').addEventListener('click', goHome);
 $('more').addEventListener('click', loadMore);
+$('view').addEventListener('click', () => setWall(!gfxRoot.classList.contains('wall')));
+try { if (localStorage.getItem('gfxp-wall') === '1') setWall(true); } catch (e) { /* default view */ }
 $('reset').addEventListener('click', () => { state.offArchives.clear(); state.types.clear(); state.printReady = false; update(); });
 // On a phone the filter panel starts folded so the crates are visible first.
 if (window.matchMedia('(max-width: 860px)').matches) $('filters').open = false;
 renderFilters();
 loadHome();
+loadChips();
 const startParams = new URLSearchParams(location.search);
 const start = startParams.get('q');
 if (start) run(start, null, startParams.get('i'));

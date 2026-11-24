@@ -108,3 +108,34 @@
 .gfxp .more{width:100%;justify-content:center;min-height:56px}
 .gfxp .more[disabled]{opacity:.6;cursor:default}
 .gfxp button.btn{cursor:pointer}
+
+/* Chips under the search box. */
+.gfxp .chiprow{display:flex;align-items:center;gap:14px;min-width:0}
+.gfxp .chips{display:flex;gap:8px;overflow-x:auto;padding:2px 0 6px;scrollbar-width:thin;flex:1 1 0;min-width:0}
+.gfxp .chip{flex:none;display:flex;align-items:center;gap:10px;height:44px;padding:0 16px 0 5px;border:1px solid var(--line);border-radius:22px;background:var(--panel);color:var(--ink);font:700 11.5px var(--mono);letter-spacing:.08em;text-transform:uppercase;white-space:nowrap;transition:border-color .2s}
+.gfxp .chip:hover{border-color:var(--lime)}
+.gfxp .chip img{width:34px;height:34px;border-radius:50%;object-fit:cover;background:#111;flex:none}
+.gfxp .chip span{padding-left:2px}
+.gfxp .chip img+span{padding-left:0}
+.gfxp .chip:not(:has(img)){padding-left:16px}
+.gfxp .tools{display:flex;gap:10px;flex-wrap:wrap}
+.gfxp .tools .btn{padding:0 16px}
+/* Trail of opened images. */
+.gfxp .trail{display:flex;align-items:center;gap:14px}
+.gfxp #trailrow{display:flex;gap:8px;overflow-x:auto;padding:2px}
+.gfxp .crumb{flex:none;width:48px;height:48px;padding:0;border:1px solid var(--line);border-radius:10px;background:#111;overflow:hidden}
+.gfxp .crumb:first-child{border-color:var(--lime)}
+.gfxp .crumb img{width:100%;height:100%;object-fit:cover;display:block}
+/* Wall view: images only, edge to edge, captions on hover. */
+.gfxp.wall .gfxp-main{max-width:none}
+.gfxp.wall .layout:has(#results:not([hidden])) .filters{display:none}
+.gfxp.wall .grid{columns:7 170px;column-gap:10px}
+.gfxp.wall .card{position:relative;margin:0 0 10px;border:0;border-radius:4px;background:#111}
+.gfxp.wall .card[aria-pressed=true]{outline:2px solid var(--lime);outline-offset:2px}
+.gfxp.wall .card span{position:absolute;left:0;right:0;padding:0 10px;opacity:0;transition:opacity .15s;pointer-events:none}
+.gfxp.wall .card .t{bottom:26px;padding-top:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-shadow:0 1px 6px #000}
+.gfxp.wall .card .m{bottom:8px;padding-bottom:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#d0d0d0;text-shadow:0 1px 6px #000}
+.gfxp.wall .card::after{content:"";position:absolute;inset:auto 0 0 0;height:70px;background:linear-gradient(transparent,rgba(0,0,0,.85));opacity:0;transition:opacity .15s;pointer-events:none}
+.gfxp.wall .card:hover span,.gfxp.wall .card:focus-visible span,.gfxp.wall .card:hover::after,.gfxp.wall .card:focus-visible::after{opacity:1}
+.gfxp.wall .card span{z-index:1}
+@media (max-width:860px){.gfxp.wall .grid{columns:3 100px}.gfxp .chiprow{gap:10px}}

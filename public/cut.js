@@ -59,7 +59,33 @@
       const a = o.mode === 'Hard' ? (t > cut ? 1 : 0) : (t <= cut ? 0 : (t - cut) / (1 - cut));
       p[i] = r; p[i + 1] = g; p[i + 2] = b; p[i + 3] = Math.round(a * (d[i + 3] / 255) * 255);
     }
+    if (o.mode === 'Halftone') halftone(out);
     return out;
+  }
+
+  // Turn the soft ink into a screen of dots, the way a tonal image is printed
+  // in one colour: darker areas get bigger dots. The dot grid is turned 45
+  // degrees and its spacing follows the image size, so a preview and the full
+  // size file look the same.
+  function halftone(img) {
+    const w = img.width, h = img.height, p = img.data;
+    const tone = new Float32Array(w * h);
+    for (let i = 0, j = 3; i < tone.length; i++, j += 4) tone[i] = p[j] / 255;
+    const cell = Math.max(4, Math.round(Math.max(w, h) / 120));
+    const k = Math.SQRT1_2;
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        // Position on the turned grid, then the centre of the dot this pixel belongs to.
+        const u = (x + y) * k, v = (y - x) * k;
+        const cu = (Math.floor(u / cell) + 0.5) * cell, cv = (Math.floor(v / cell) + 0.5) * cell;
+        let cx = Math.round((cu - cv) * k), cy = Math.round((cu + cv) * k);
+        cx = cx < 0 ? 0 : cx >= w ? w - 1 : cx; cy = cy < 0 ? 0 : cy >= h ? h - 1 : cy;
+        const radius = Math.sqrt(tone[cy * w + cx]) * cell * 0.74;
+        const dist = Math.hypot(u - cu, v - cv);
+        const a = radius - dist + 0.5; // half a pixel of softening on the dot edge
+        p[(y * w + x) * 4 + 3] = a <= 0 ? 0 : a >= 1 ? 255 : Math.round(a * 255);
+      }
+    }
   }
 
   // A row of pick-one buttons. Returns the element and a way to set it from code.
@@ -125,7 +151,7 @@
     const backSeg = seg('Preview on', ['Grid', 'Black', 'White'], o.back, (v) => { o.back = v; draw(); });
     const inkSeg = seg('Ink colour', Object.keys(INKS), o.ink, (v) => { o.ink = v; o.back = BACK_FOR_INK[v]; backSeg.set(o.back); draw(); });
     const tools = el('div', { className: 'cuttools', hidden: true }, [
-      seg('Edge', ['Soft', 'Hard'], o.mode, (v) => { o.mode = v; draw(); }).node,
+      seg('Style', ['Soft', 'Hard', 'Halftone'], o.mode, (v) => { o.mode = v; draw(); }).node,
       el('label', { className: 'rng' }, ['How much paper to remove', range]),
       inkSeg.node,
       backSeg.node,

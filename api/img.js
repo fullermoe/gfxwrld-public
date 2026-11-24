@@ -14,6 +14,7 @@ const ALLOWED = new Set([
   'thumb.wikimedia.org',
 ]);
 const MAX_BYTES = 40 * 1024 * 1024;
+export const isAllowedImage = (u) => u.protocol === 'https:' && ALLOWED.has(u.hostname);
 
 export default async function handler(req, res) {
   let u;
@@ -23,7 +24,7 @@ export default async function handler(req, res) {
     res.status(400).json({ error: 'Bad image address.' });
     return;
   }
-  if (u.protocol !== 'https:' || !ALLOWED.has(u.hostname)) {
+  if (!isAllowedImage(u)) {
     res.status(400).json({ error: 'Image host not allowed.' });
     return;
   }
@@ -40,6 +41,13 @@ export default async function handler(req, res) {
       return;
     }
     res.setHeader('Content-Type', type);
+    // dl=1 saves the file instead of showing it. The name is reduced to plain
+    // characters so nothing unexpected can be put in the header.
+    if (req.query && req.query.dl) {
+      const ext = type.includes('png') ? 'png' : type.includes('gif') ? 'gif' : 'jpg';
+      const name = String(req.query.name || 'gfxwrld-archive').replace(/[^a-zA-Z0-9_-]+/g, '-').slice(0, 80) || 'gfxwrld-archive';
+      res.setHeader('Content-Disposition', `attachment; filename="${name}.${ext}"`);
+    }
     res.setHeader('Cache-Control', 'public, max-age=86400, s-maxage=604800');
     Readable.fromWeb(r.body).on('error', () => res.end()).pipe(res);
   } catch (e) {

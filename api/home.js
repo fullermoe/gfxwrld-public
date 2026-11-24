@@ -7,6 +7,8 @@
 // Add ?debug=1 to see which source failed for which crate (not cached).
 import aic from '../lib/aic.js';
 import cma from '../lib/cma.js';
+import wikimedia from '../lib/wikimedia.js';
+import { score, dedupe } from '../lib/common.js';
 
 const CRATES = [
   { label: 'Skulls', q: 'skull' },
@@ -23,7 +25,13 @@ const CRATES = [
   { label: 'Anatomy', q: 'anatomy' },
 ];
 
-const SOURCES = { cma, aic };
+// Wikimedia Commons is the fallback: it only reaches a cover when the two
+// museums are short on a subject.
+const SOURCES = { cma, aic, wikimedia };
+// Ask each archive for more than a crate shows, then keep its best few: flat
+// art that names the subject first, so a cover is a print of an angel and not
+// a tea set that happens to be filed under one.
+const FETCH = 12;
 const PER_SOURCE = 4;
 const BATCH = 4;
 
@@ -31,22 +39,25 @@ async function loadCrate(c) {
   const errors = {};
   const lists = await Promise.all(
     Object.entries(SOURCES).map(([name, fn]) =>
-      fn(c.q, PER_SOURCE).catch((e) => {
-        errors[name] = String((e && e.message) || e);
-        return [];
-      })
+      fn(c.q, FETCH)
+        .then((list) => list.map((it) => ({ it, s: score(it, c.q) })).sort((a, b) => b.s - a.s).map((x) => x.it).slice(0, PER_SOURCE))
+        .catch((e) => {
+          errors[name] = String((e && e.message) || e);
+          return [];
+        })
     )
   );
   const mixed = [];
   for (let i = 0; i < PER_SOURCE; i++) for (const l of lists) if (l[i]) mixed.push(l[i]);
+  mixed.sort((a, b) => score(b, c.q) - score(a, c.q));
   return {
     label: c.label,
     q: c.q,
-    full: lists.every((l) => l.length > 0),
+    full: lists.slice(0, 2).some((l) => l.length > 0),
     errors,
     counts: lists.map((l) => l.length),
     // Up to 8: the page shows 4 and keeps the rest as spares for failed images.
-    items: mixed.slice(0, 8).map((it) => ({ title: it.title, source: it.source, thumb: it.thumb })),
+    items: dedupe(mixed).slice(0, 8).map((it) => ({ title: it.title, source: it.source, thumb: it.thumb })),
   };
 }
 

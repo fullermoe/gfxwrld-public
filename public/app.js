@@ -38,6 +38,7 @@ const GFX_MARKUP = `
           <div class="grid" id="grid"></div>
           <aside class="panel detail" id="detail" hidden aria-label="Selected image"></aside>
         </div>
+        <button type="button" class="btn g more" id="more" hidden>Load more</button>
         <div class="msg" id="msg" hidden></div>
       </section>
     </div>
@@ -68,7 +69,19 @@ function typeOf(it) {
 }
 const isPrintReady = (it) => Boolean(it.width && it.height && Math.min(it.width, it.height) >= PRINT_MIN);
 
-const state = { items: [], q: '', offArchives: new Set(), types: new Set(), printReady: false };
+const state = { items: [], q: '', page: 0, more: false, offArchives: new Set(), types: new Set(), printReady: false };
+const api = (path) => GFX_ORIGIN + path;
+const proxied = (u) => api('/api/img?u=' + encodeURIComponent(u));
+const slug = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 50);
+const megabytes = (b) => (b >= 1048576 ? (b / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(b / 1024)) + ' KB');
+// The address of the page with the current search and, when one is open, the image.
+function setAddress(itemId) {
+  const p = new URLSearchParams();
+  if (state.q) p.set('q', state.q);
+  if (itemId) p.set('i', itemId);
+  const qs = p.toString();
+  history.replaceState(null, '', location.pathname + (qs ? '?' + qs : ''));
+}
 const passes = (it) => !state.offArchives.has(it.source) && (state.types.size === 0 || state.types.has(typeOf(it))) && (!state.printReady || isPrintReady(it));
 
 function option(label, checked, count, onChange) {
@@ -94,32 +107,60 @@ function renderFilters() {
 }
 
 function showDetail(it, card) {
-  document.querySelectorAll('.card').forEach((c) => c.setAttribute('aria-pressed', c === card ? 'true' : 'false'));
-  const size = it.width && it.height ? it.width + ' x ' + it.height + ' px' : 'See source';
-  const rows = [['Source', it.via ? it.via + ' via ' + it.source : it.source], ['Maker', it.maker || 'Unknown'], ['Date', it.date || 'Unknown'], ['Type', it.type || 'Not labelled'], ['Rights', it.rights === 'CC0' ? 'CC0 / public domain' : 'Public domain'], ['Size', size]];
+  document.querySelectorAll('.gfxp .card').forEach((c) => c.setAttribute('aria-pressed', c === card ? 'true' : 'false'));
+  const known = it.width && it.height;
+  const sizeCell = el('span', { textContent: known ? it.width + ' x ' + it.height + ' px' : 'Checking' });
+  const row = (k, v) => el('div', { className: 'row' }, [el('span', { textContent: k }), typeof v === 'string' ? el('span', { textContent: v }) : v]);
   const img = el('img', { src: it.thumb, alt: it.title });
   img.addEventListener('error', () => img.remove());
+  const copy = el('button', { type: 'button', className: 'btn g', textContent: 'Copy link to this image' });
+  copy.addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText(location.href); copy.textContent = 'Link copied'; }
+    catch (e) { copy.textContent = 'Copy it from the address bar'; }
+    setTimeout(() => { copy.textContent = 'Copy link to this image'; }, 2500);
+  });
+  const dl = el('a', { className: 'btn p', href: proxied(it.image) + '&dl=1&name=' + encodeURIComponent('gfxwrld-' + (slug(it.title) || it.id)), textContent: 'Download image' });
   $('detail').replaceChildren(
     el('div', { className: 'ph' }, [el('i'), it.id.toUpperCase().slice(0, 24) + ' @ 100%']),
     img,
     el('h3', { textContent: it.title }),
-    ...rows.map(([k, v]) => el('div', { className: 'row' }, [el('span', { textContent: k }), el('span', { textContent: v })])),
+    row('Source', it.via ? it.via + ' via ' + it.source : it.source),
+    row('Maker', it.maker || 'Unknown'),
+    row('Date', it.date || 'Unknown'),
+    row('Type', it.type || 'Not labelled'),
+    row('Rights', it.rights === 'CC0' ? 'CC0 / public domain' : 'Public domain'),
+    row('Size', sizeCell),
     el('div', { className: 'acts' }, [
-      el('a', { className: 'btn p', href: it.image, target: '_blank', rel: 'noopener', textContent: 'Open full image' }),
+      dl,
       el('a', { className: 'btn g', href: it.link, target: '_blank', rel: 'noopener', textContent: 'View original record' }),
+      copy,
       el('p', { className: 'note', textContent: 'Public domain covers copyright only. Trademarks, logos and a real person\'s likeness can still need permission. Check before you print.' }),
     ])
   );
   $('detail').hidden = false;
+  setAddress(it.id);
+  // Some archives do not say how big their files are, so the file is measured.
+  // The answer is kept on the item, which also lets the Print ready filter see it.
+  fetch(api('/api/size?u=' + encodeURIComponent(it.image))).then((r) => (r.ok ? r.json() : null)).then((s) => {
+    if (!s) { if (!known) sizeCell.textContent = 'See source'; return; }
+    if (s.width && s.height) { it.width = s.width; it.height = s.height; }
+    const px = it.width && it.height ? it.width + ' x ' + it.height + ' px' : 'See source';
+    sizeCell.textContent = px + (s.bytes ? ' / ' + megabytes(s.bytes) : '');
+  }).catch(() => { if (!known) sizeCell.textContent = 'See source'; });
   // Lets add-ons such as the background remover attach to the open panel.
   document.dispatchEvent(new CustomEvent('gfx:detail', { detail: { item: it } }));
 }
 
+const cards = new Map();
+
 function renderGrid() {
   if ($('results').hidden) return;
   const shown = state.items.filter(passes);
+  const open = new URLSearchParams(location.search).get('i');
   $('detail').hidden = true;
   $('status').textContent = state.items.length ? shown.length + ' of ' + state.items.length + ' shown / public domain only' : '';
+  cards.clear();
+  $('more').hidden = !state.more;
   $('grid').replaceChildren(...shown.map((it) => {
     const img = el('img', { src: it.thumb, alt: '', loading: 'lazy' });
     const card = el('button', { type: 'button', className: 'card' }, [
@@ -131,8 +172,11 @@ function renderGrid() {
     img.addEventListener('error', () => card.remove());
     card.setAttribute('aria-pressed', 'false');
     card.addEventListener('click', () => showDetail(it, card));
+    cards.set(it.id, card);
     return card;
   }));
+  const again = open && shown.find((it) => it.id === open);
+  if (again) showDetail(again, cards.get(again.id)); else if (open) setAddress(null);
   if (state.items.length && !shown.length) { $('msg').hidden = false; $('msg').textContent = 'Nothing matches these filters. Reset them to see all ' + state.items.length + ' results.'; }
   else if (state.items.length) $('msg').hidden = true;
 }
@@ -140,35 +184,64 @@ function renderGrid() {
 function update() { renderFilters(); renderGrid(); }
 
 function goHome() {
-  state.items = []; state.q = '';
+  state.items = []; state.q = ''; state.page = 0; state.more = false;
   $('results').hidden = true; $('home').hidden = false; $('q').value = '';
-  history.replaceState(null, '', location.pathname);
+  setAddress(null);
   renderFilters();
   toTop();
 }
 
-async function run(q, label) {
-  state.q = q; state.items = [];
+async function fetchPage(q, page) {
+  const r = await fetch(api('/api/search?q=' + encodeURIComponent(q) + (page ? '&page=' + page : '')));
+  const data = await r.json();
+  if (!r.ok) throw new Error(data.error || 'Search failed');
+  return data;
+}
+
+async function run(q, label, openId) {
+  state.q = q; state.items = []; state.page = 0; state.more = false;
   $('q').value = q;
-  history.replaceState(null, '', '?q=' + encodeURIComponent(q));
+  setAddress(openId || null);
   $('home').hidden = true; $('results').hidden = false;
   $('rt').textContent = label || q;
   $('status').textContent = '';
   $('msg').hidden = false; $('msg').textContent = 'Searching the archives';
-  $('grid').replaceChildren(); $('detail').hidden = true;
+  $('grid').replaceChildren(); $('detail').hidden = true; $('more').hidden = true;
   renderFilters();
   try {
-    const r = await fetch(GFX_ORIGIN + '/api/search?q=' + encodeURIComponent(q));
-    const data = await r.json();
-    if (!r.ok) throw new Error(data.error || 'Search failed');
+    const data = await fetchPage(q, 0);
     if (state.q !== q) return;
     state.items = data.items || [];
+    state.more = Boolean(data.more);
     if (!state.items.length) { $('msg').textContent = 'Nothing public domain came back for that. Try a broader word.'; renderFilters(); return; }
     update();
     const down = (data.sources || []).filter((s) => !s.ok).map((s) => s.name);
     if (down.length) $('status').textContent += ' / ' + down.join(', ') + ' did not respond';
   } catch (e) {
     $('msg').hidden = false; $('msg').textContent = 'The search did not go through. Try again in a moment.';
+  }
+}
+
+// The next batch from every archive, added under what is already showing.
+async function loadMore() {
+  const q = state.q;
+  const btn = $('more');
+  btn.disabled = true; btn.textContent = 'Loading';
+  try {
+    const data = await fetchPage(q, state.page + 1);
+    if (state.q !== q) return;
+    const have = new Set(state.items.map((it) => it.id));
+    const fresh = (data.items || []).filter((it) => !have.has(it.id));
+    state.page += 1;
+    state.more = Boolean(data.more) && fresh.length > 0;
+    state.items.push(...fresh);
+    const at = window.scrollY;
+    update();
+    window.scrollTo({ top: at });
+  } catch (e) {
+    $('status').textContent = 'More results did not load. Try again in a moment.';
+  } finally {
+    btn.disabled = false; btn.textContent = 'Load more';
   }
 }
 
@@ -204,7 +277,7 @@ async function loadHome() {
   const box = $('crates');
   box.replaceChildren(...Array.from({ length: 8 }, skeleton));
   try {
-    const r = await fetch(GFX_ORIGIN + '/api/home');
+    const r = await fetch(api('/api/home'));
     const data = await r.json();
     if (!r.ok || !data.crates || !data.crates.length) throw new Error('no crates');
     box.replaceChildren(...data.crates.map(crateCard));
@@ -215,11 +288,13 @@ async function loadHome() {
 
 $('f').addEventListener('submit', (e) => { e.preventDefault(); const q = $('q').value.trim(); if (q) run(q); });
 $('back').addEventListener('click', goHome);
+$('more').addEventListener('click', loadMore);
 $('reset').addEventListener('click', () => { state.offArchives.clear(); state.types.clear(); state.printReady = false; update(); });
 // On a phone the filter panel starts folded so the crates are visible first.
 if (window.matchMedia('(max-width: 860px)').matches) $('filters').open = false;
 renderFilters();
 loadHome();
-const start = new URLSearchParams(location.search).get('q');
-if (start) run(start);
+const startParams = new URLSearchParams(location.search);
+const start = startParams.get('q');
+if (start) run(start, null, startParams.get('i'));
 })();

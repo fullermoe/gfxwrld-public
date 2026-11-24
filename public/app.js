@@ -52,7 +52,7 @@ const toTop = () => { if (gfxRoot.getBoundingClientRect().top < 0) gfxRoot.scrol
 const $ = (id) => document.getElementById(id);
 const el = (tag, props = {}, kids = []) => { if (tag === 'img') props = { referrerPolicy: 'no-referrer', ...props }; const n = Object.assign(document.createElement(tag), props); kids.forEach((k) => n.append(k)); return n; };
 
-const ARCHIVES = ['The Met', 'Art Institute of Chicago', 'Cleveland Museum of Art', 'Europeana', 'Wikimedia Commons'];
+const ARCHIVES = ['The Met', 'Art Institute of Chicago', 'Cleveland Museum of Art', 'Smithsonian', 'Europeana', 'Wikimedia Commons'];
 const TYPES = ['Prints', 'Drawings', 'Paintings', 'Photographs', 'Objects', 'Not labelled'];
 const PRINT_MIN = 3000;
 

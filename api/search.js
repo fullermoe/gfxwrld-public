@@ -7,6 +7,7 @@ import aic from '../lib/aic.js';
 import cma from '../lib/cma.js';
 import europeana from '../lib/europeana.js';
 import wikimedia from '../lib/wikimedia.js';
+import smithsonian from '../lib/smithsonian.js';
 import { score, dedupe } from '../lib/common.js';
 
 const MAX_PAGE = 8;
@@ -15,6 +16,7 @@ const SOURCES = {
   'The Met': met,
   'Art Institute of Chicago': aic,
   'Cleveland Museum of Art': cma,
+  Smithsonian: smithsonian,
   Europeana: europeana,
   'Wikimedia Commons': wikimedia,
 };

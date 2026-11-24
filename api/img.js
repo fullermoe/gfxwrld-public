@@ -10,6 +10,8 @@ const ALLOWED = new Set([
   'www.artic.edu',
   'openaccess-cdn.clevelandart.org',
   'api.europeana.eu',
+  'ids.si.edu',
+  'smithsonian-open-access.s3-us-west-2.amazonaws.com',
   'upload.wikimedia.org',
   'thumb.wikimedia.org',
 ]);

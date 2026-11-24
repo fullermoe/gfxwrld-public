@@ -1,0 +1,48 @@
+// Image pass-through for the background remover. A browser will not let a page
+// read the pixels of an image from another site, so the remover loads images
+// through this address instead. Only the archives' own image hosts are allowed,
+// so this cannot be used to fetch anything else.
+import { Readable } from 'node:stream';
+import { UA } from '../lib/common.js';
+
+const ALLOWED = new Set([
+  'images.metmuseum.org',
+  'www.artic.edu',
+  'openaccess-cdn.clevelandart.org',
+  'api.europeana.eu',
+  'upload.wikimedia.org',
+  'thumb.wikimedia.org',
+]);
+const MAX_BYTES = 40 * 1024 * 1024;
+
+export default async function handler(req, res) {
+  let u;
+  try {
+    u = new URL(String((req.query && req.query.u) || ''));
+  } catch (e) {
+    res.status(400).json({ error: 'Bad image address.' });
+    return;
+  }
+  if (u.protocol !== 'https:' || !ALLOWED.has(u.hostname)) {
+    res.status(400).json({ error: 'Image host not allowed.' });
+    return;
+  }
+  try {
+    const r = await fetch(u, { headers: { 'User-Agent': UA, Accept: 'image/*' }, signal: AbortSignal.timeout(25000) });
+    const type = r.headers.get('content-type') || '';
+    const size = Number(r.headers.get('content-length') || 0);
+    if (!r.ok || !type.startsWith('image/') || !r.body) {
+      res.status(502).json({ error: 'The archive did not return an image.' });
+      return;
+    }
+    if (size > MAX_BYTES) {
+      res.status(413).json({ error: 'Image too large.' });
+      return;
+    }
+    res.setHeader('Content-Type', type);
+    res.setHeader('Cache-Control', 'public, max-age=86400, s-maxage=604800');
+    Readable.fromWeb(r.body).on('error', () => res.end()).pipe(res);
+  } catch (e) {
+    res.status(502).json({ error: 'Could not reach the archive.' });
+  }
+}

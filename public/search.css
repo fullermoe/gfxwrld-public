@@ -1,0 +1,2 @@
+/* Search box placeholder: darker than typed text so it reads as a hint. */
+#q::placeholder{color:#6c6c6c;opacity:1}

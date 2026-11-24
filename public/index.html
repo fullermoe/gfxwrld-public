@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GFXWRLD Public / archive search</title>
+<meta name="robots" content="noindex">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@400;500&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/styles.css">
+<link rel="stylesheet" href="/search.css">
+<link rel="stylesheet" href="/cut.css">
+</head>
+<body>
+<main>
+  <section class="hero">
+    <h1>Every public archive. One search.</h1>
+    <p class="sub">Museum art you can put on a shirt. Pick a crate to start digging, or search for exactly what you need.</p>
+  </section>
+
+  <section class="panel" aria-label="Search">
+    <div class="ph"><i></i>ARCHIVE_SEARCH @ 100%</div>
+    <form id="f">
+      <label for="q" class="sr">Search the archives</label>
+      <input id="q" type="search" placeholder="Skull, eagle, boxing" autocomplete="off">
+      <button class="go" type="submit">Search<span aria-hidden="true">&rarr;</span></button>
+    </form>
+  </section>
+
+  <div class="layout">
+    <details class="panel filters" id="filters" open>
+      <summary class="ph"><i></i>FILTERS<span class="spacer"></span><span id="fcount" class="lime"></span></summary>
+      <div id="fbody"></div>
+      <div class="fnote">
+        <button type="button" class="btn g small" id="reset">Reset filters</button>
+        <p class="note">Filters apply to every crate and search you open.</p>
+      </div>
+    </details>
+
+    <div class="content">
+      <section id="home" class="stack">
+        <div class="bar"><h2>Start with a crate</h2><span class="lbl dim">Pulled live from the archives</span></div>
+        <div class="crates" id="crates"></div>
+      </section>
+
+      <section id="results" class="stack" hidden>
+        <div class="bar"><h2 id="rt"></h2><button type="button" class="btn g small" id="back">&larr;&nbsp; All crates</button></div>
+        <p class="lbl dim" id="status" aria-live="polite"></p>
+        <div class="cols">
+          <div class="grid" id="grid"></div>
+          <aside class="panel detail" id="detail" hidden aria-label="Selected image"></aside>
+        </div>
+        <div class="msg" id="msg" hidden></div>
+      </section>
+    </div>
+  </div>
+</main>
+<script src="/app.js"></script>
+<script src="/typing.js"></script>
+<script src="/cut.js"></script>
+</body>
+</html>

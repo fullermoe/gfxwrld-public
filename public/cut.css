@@ -1,0 +1,21 @@
+/* Background remover controls inside the result panel. */
+.cuttabs{display:flex;border-bottom:1px solid var(--line2)}
+.cuttabs button{flex:1 1 0;min-height:44px;border:0;border-bottom:2px solid transparent;background:none;color:var(--ink2);font:700 11px var(--mono);letter-spacing:.12em;text-transform:uppercase}
+.cuttabs button[aria-pressed=true]{color:var(--ink);border-bottom-color:var(--lime)}
+.cutstage{display:grid;place-items:center;min-height:200px;background-color:#2a2a2a;background-image:linear-gradient(45deg,#333 25%,transparent 25%),linear-gradient(-45deg,#333 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#333 75%),linear-gradient(-45deg,transparent 75%,#333 75%);background-size:16px 16px;background-position:0 0,0 8px,8px -8px,-8px 0}
+.cutstage[data-back=Black]{background:#000}
+.cutstage[data-back=White]{background:#f1f1f1}
+.cutstage canvas{display:block;max-width:100%;max-height:380px}
+.cuttools{display:grid;gap:14px;padding:14px 16px;border-top:1px solid var(--line2)}
+.seg{display:grid;gap:6px}
+.seg>span,.cuttools label.rng{font:700 10.5px var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--ink2)}
+.seg>div{display:flex;gap:6px}
+.seg button{flex:1 1 0;min-height:40px;padding:0 6px;border:1px solid #3a3a3a;border-radius:8px;background:#000;color:var(--ink);font:700 10.5px var(--mono);letter-spacing:.1em;text-transform:uppercase}
+.seg button[aria-pressed=true]{background:var(--lime);border-color:var(--lime);color:#000}
+.cuttools label.rng{display:grid;gap:6px}
+.cuttools input[type=range]{width:100%;accent-color:var(--lime)}
+.cuttools label.chk{display:flex;align-items:center;gap:10px;min-height:32px;font:700 11px var(--mono);letter-spacing:.08em;text-transform:uppercase;cursor:pointer}
+.cuttools label.chk input{width:16px;height:16px;margin:0;accent-color:var(--lime)}
+.cuttools .btn{width:100%;border:0}
+.cuttools .btn.p{cursor:pointer}
+.cutstatus{margin:0;min-height:18px;font-size:11.5px;color:var(--ink2)}

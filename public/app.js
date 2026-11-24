@@ -135,12 +135,18 @@ function chip(label, image, go) {
 }
 function relatedChips() {
   const makers = new Map(), kinds = new Map();
+  const words = state.q.toLowerCase().split(/\s+/).filter((w) => w.length >= 3);
   const add = (map, key, it) => { const e = map.get(key) || { n: 0, it }; e.n++; map.set(key, e); };
   for (const it of state.items) {
-    const m = String(it.maker || '').split('(')[0].trim();
+    // One museum writes "Kitagawa Utamaro", another "Utamaro, Kitagawa".
+    let m = String(it.maker || '').split('(')[0].trim();
+    const parts = m.split(',').map((x) => x.trim());
+    if (parts.length === 2 && parts[1] && !/\d/.test(parts[1])) m = parts[1] + ' ' + parts[0];
     if (m && m.length < 40 && !/unknown|anonymous|artist/i.test(m)) add(makers, m, it);
-    const k = String(it.type || '').trim();
-    if (k && k.length < 28) add(kinds, k, it);
+    // Kinds of work that would only repeat the search ("woodblock print" under
+    // a woodblock search, or plain "print" twice) are left out.
+    const k = String(it.type || '').trim().toLowerCase().replace(/s$/, '');
+    if (k && k.length < 28 && !words.some((w) => k.includes(w.slice(0, 5)))) add(kinds, k, it);
   }
   const top = (map, max) => [...map.entries()].filter(([, e]) => e.n >= 2).sort((a, b) => b[1].n - a[1].n).slice(0, max);
   const q = state.q.toLowerCase();

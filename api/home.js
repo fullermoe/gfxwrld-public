@@ -56,8 +56,7 @@ async function loadCrate(c) {
     full: lists.slice(0, 2).some((l) => l.length > 0),
     errors,
     counts: lists.map((l) => l.length),
-    // Up to 8: the page shows 4 and keeps the rest as spares for failed images.
-    items: dedupe(mixed).slice(0, 8).map((it) => ({ title: it.title, source: it.source, thumb: it.thumb })),
+    items: dedupe(mixed).map((it) => ({ title: it.title, source: it.source, thumb: it.thumb })),
   };
 }
 
@@ -69,6 +68,13 @@ export default async function handler(req, res) {
   if (req.query && req.query.debug) {
     res.status(200).json(crates.map(({ label, counts, errors }) => ({ label, counts, errors })));
     return;
+  }
+  // No image leads two crates: each crate skips what an earlier one already
+  // shows. Up to 8 are sent: the page shows 4 and keeps the rest as spares.
+  const used = new Set();
+  for (const c of crates) {
+    c.items = c.items.filter((it) => !used.has(it.thumb)).slice(0, 8);
+    c.items.slice(0, 4).forEach((it) => used.add(it.thumb));
   }
   const shown = crates.filter((c) => c.items.length >= 4);
   // Only keep a load for a day when every source answered for most crates.

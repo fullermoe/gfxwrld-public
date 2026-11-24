@@ -71,6 +71,19 @@ const isPrintReady = (it) => Boolean(it.width && it.height && Math.min(it.width,
 
 const state = { items: [], q: '', page: 0, more: false, offArchives: new Set(), types: new Set(), printReady: false };
 const api = (path) => GFX_ORIGIN + path;
+// A small, fast copy of an archive image for covers and result cards. The
+// archives only offer large files, so these are resized on the way through.
+const small = (u, w) => api('/_vercel/image?url=' + encodeURIComponent(u) + '&w=' + w + '&q=70');
+// An image element that shows the small copy and falls back to the archive's
+// own file if the small copy cannot be made.
+function thumb(it, w, props, onFail) {
+  const img = el('img', { alt: '', ...props, src: small(it.thumb, w) });
+  let triedOriginal = false;
+  img.addEventListener('error', () => {
+    if (!triedOriginal) { triedOriginal = true; img.src = it.thumb; } else onFail(img);
+  });
+  return img;
+}
 const proxied = (u) => api('/api/img?u=' + encodeURIComponent(u));
 const slug = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 50);
 const megabytes = (b) => (b >= 1048576 ? (b / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(b / 1024)) + ' KB');
@@ -162,14 +175,13 @@ function renderGrid() {
   cards.clear();
   $('more').hidden = !state.more;
   $('grid').replaceChildren(...shown.map((it) => {
-    const img = el('img', { src: it.thumb, alt: '', loading: 'lazy' });
+    // A result whose image will not load is no use to anyone: drop the card.
+    const img = thumb(it, 384, { loading: 'lazy' }, () => card.remove());
     const card = el('button', { type: 'button', className: 'card' }, [
       img,
       el('span', { className: 't', textContent: it.title }),
       el('span', { className: 'm', textContent: it.source + (it.date ? ' / ' + it.date : '') }),
     ]);
-    // A result whose image will not load is no use to anyone: drop the card.
-    img.addEventListener('error', () => card.remove());
     card.setAttribute('aria-pressed', 'false');
     card.addEventListener('click', () => showDetail(it, card));
     cards.set(it.id, card);
@@ -250,13 +262,12 @@ function crateCard(c) {
   const cells = [];
   for (let i = 0; i < 4; i++) {
     const cell = el('span', { className: 'cell' });
-    const it = spares.shift();
-    if (it) {
-      const img = el('img', { alt: '', src: it.thumb });
-      // If an image fails, swap in a spare; with none left, leave the empty tile.
-      img.addEventListener('error', () => { const next = spares.shift(); if (next) img.src = next.thumb; else img.remove(); });
-      cell.append(img);
-    }
+    // If an image fails, swap in a spare; with none left, leave the empty tile.
+    const fill = () => {
+      const it = spares.shift();
+      if (it) cell.replaceChildren(thumb(it, 384, {}, fill)); else cell.replaceChildren();
+    };
+    fill();
     cells.push(cell);
   }
   const a = el('a', { className: 'crate', href: '?q=' + encodeURIComponent(c.q) }, [

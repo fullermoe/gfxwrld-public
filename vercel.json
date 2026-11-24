@@ -2,11 +2,57 @@
   "headers": [
     {
       "source": "/(.*)",
-      "headers": [{ "key": "Referrer-Policy", "value": "no-referrer" }]
+      "headers": [
+        {
+          "key": "Referrer-Policy",
+          "value": "no-referrer"
+        }
+      ]
     },
     {
       "source": "/api/(.*)",
-      "headers": [{ "key": "Access-Control-Allow-Origin", "value": "*" }]
+      "headers": [
+        {
+          "key": "Access-Control-Allow-Origin",
+          "value": "*"
+        }
+      ]
     }
-  ]
+  ],
+  "images": {
+    "sizes": [
+      384,
+      640
+    ],
+    "formats": [
+      "image/webp"
+    ],
+    "minimumCacheTTL": 2592000,
+    "remotePatterns": [
+      {
+        "protocol": "https",
+        "hostname": "images.metmuseum.org"
+      },
+      {
+        "protocol": "https",
+        "hostname": "www.artic.edu"
+      },
+      {
+        "protocol": "https",
+        "hostname": "openaccess-cdn.clevelandart.org"
+      },
+      {
+        "protocol": "https",
+        "hostname": "api.europeana.eu"
+      },
+      {
+        "protocol": "https",
+        "hostname": "upload.wikimedia.org"
+      },
+      {
+        "protocol": "https",
+        "hostname": "ids.si.edu"
+      }
+    ]
+  }
 }

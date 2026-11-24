@@ -1,6 +1,55 @@
 // GFXWRLD Public: home crates, search, and the left-hand filter panel.
+(() => {
+// The same files run the standalone site and the page on gfxwrld.com. A host
+// page only needs an element marked data-gfx-app inside a .gfxp wrapper; the
+// markup below is placed into it, and every request goes back to the site
+// these scripts were loaded from.
+const GFX_ORIGIN = document.currentScript ? new URL(document.currentScript.src).origin : '';
+const GFX_MARKUP = `
+  <section class="panel" aria-label="Search">
+    <div class="ph"><i></i>ARCHIVE_SEARCH @ 100%</div>
+    <form id="f">
+      <label for="q" class="sr">Search the archives</label>
+      <input id="q" type="search" placeholder="Skull, eagle, boxing" autocomplete="off">
+      <button class="go" type="submit">Search<span aria-hidden="true">&rarr;</span></button>
+    </form>
+  </section>
+
+  <div class="layout">
+    <details class="panel filters" id="filters" open>
+      <summary class="ph"><i></i>FILTERS<span class="spacer"></span><span id="fcount" class="lime"></span></summary>
+      <div id="fbody"></div>
+      <div class="fnote">
+        <button type="button" class="btn g small" id="reset">Reset filters</button>
+        <p class="note">Filters apply to every crate and search you open.</p>
+      </div>
+    </details>
+
+    <div class="content">
+      <section id="home" class="stack">
+        <div class="bar"><h2>Start with a crate</h2><span class="lbl dim">Pulled live from the archives</span></div>
+        <div class="crates" id="crates"></div>
+      </section>
+
+      <section id="results" class="stack" hidden>
+        <div class="bar"><h2 id="rt"></h2><button type="button" class="btn g small" id="back">&larr;&nbsp; All crates</button></div>
+        <p class="lbl dim" id="status" aria-live="polite"></p>
+        <div class="cols">
+          <div class="grid" id="grid"></div>
+          <aside class="panel detail" id="detail" hidden aria-label="Selected image"></aside>
+        </div>
+        <div class="msg" id="msg" hidden></div>
+      </section>
+    </div>
+  </div>
+`;
+const gfxMount = document.querySelector('[data-gfx-app]');
+if (gfxMount && !document.getElementById('f')) gfxMount.innerHTML = GFX_MARKUP;
+const gfxRoot = document.querySelector('.gfxp') || document.body;
+// Back to the top of the tool, not the top of the host page.
+const toTop = () => { if (gfxRoot.getBoundingClientRect().top < 0) gfxRoot.scrollIntoView(); };
 const $ = (id) => document.getElementById(id);
-const el = (tag, props = {}, kids = []) => { const n = Object.assign(document.createElement(tag), props); kids.forEach((k) => n.append(k)); return n; };
+const el = (tag, props = {}, kids = []) => { if (tag === 'img') props = { referrerPolicy: 'no-referrer', ...props }; const n = Object.assign(document.createElement(tag), props); kids.forEach((k) => n.append(k)); return n; };
 
 const ARCHIVES = ['The Met', 'Art Institute of Chicago', 'Cleveland Museum of Art', 'Europeana', 'Wikimedia Commons'];
 const TYPES = ['Prints', 'Drawings', 'Paintings', 'Photographs', 'Objects', 'Not labelled'];
@@ -95,7 +144,7 @@ function goHome() {
   $('results').hidden = true; $('home').hidden = false; $('q').value = '';
   history.replaceState(null, '', location.pathname);
   renderFilters();
-  window.scrollTo({ top: 0 });
+  toTop();
 }
 
 async function run(q, label) {
@@ -109,7 +158,7 @@ async function run(q, label) {
   $('grid').replaceChildren(); $('detail').hidden = true;
   renderFilters();
   try {
-    const r = await fetch('/api/search?q=' + encodeURIComponent(q));
+    const r = await fetch(GFX_ORIGIN + '/api/search?q=' + encodeURIComponent(q));
     const data = await r.json();
     if (!r.ok) throw new Error(data.error || 'Search failed');
     if (state.q !== q) return;
@@ -142,7 +191,7 @@ function crateCard(c) {
     el('span', { className: 'cap' }, [el('span', { textContent: c.label }), el('span', { textContent: '→' })]),
   ]);
   a.setAttribute('aria-label', 'Browse ' + c.label);
-  a.addEventListener('click', (e) => { e.preventDefault(); run(c.q, c.label); window.scrollTo({ top: 0 }); });
+  a.addEventListener('click', (e) => { e.preventDefault(); run(c.q, c.label); toTop(); });
   return a;
 }
 
@@ -155,7 +204,7 @@ async function loadHome() {
   const box = $('crates');
   box.replaceChildren(...Array.from({ length: 8 }, skeleton));
   try {
-    const r = await fetch('/api/home');
+    const r = await fetch(GFX_ORIGIN + '/api/home');
     const data = await r.json();
     if (!r.ok || !data.crates || !data.crates.length) throw new Error('no crates');
     box.replaceChildren(...data.crates.map(crateCard));
@@ -173,3 +222,4 @@ renderFilters();
 loadHome();
 const start = new URLSearchParams(location.search).get('q');
 if (start) run(start);
+})();

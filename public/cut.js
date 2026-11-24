@@ -11,12 +11,14 @@
   // The preview backdrop that shows each ink best.
   const BACK_FOR_INK = { Black: 'White', White: 'Black', Lime: 'Black' };
   const el = (tag, props = {}, kids = []) => { const n = Object.assign(document.createElement(tag), props); kids.forEach((k) => n.append(k)); return n; };
-  const proxied = (u) => '/api/img?u=' + encodeURIComponent(u);
+  const ORIGIN = document.currentScript ? new URL(document.currentScript.src).origin : '';
+  const proxied = (u) => ORIGIN + '/api/img?u=' + encodeURIComponent(u);
   let job = 0;
 
   function load(url, max) {
     return new Promise((resolve, reject) => {
       const img = new Image();
+      img.crossOrigin = 'anonymous';
       img.onload = () => {
         const scale = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
         const c = document.createElement('canvas');

@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Background remover test</title>
+<meta name="robots" content="noindex">
+<style>
+  body{margin:0;background:#000;color:#f1f1f1;font:13px/1.5 ui-monospace,Menlo,monospace;padding:20px}
+  h1{font-size:18px;margin:0 0 6px}
+  #log{color:#959595;margin:0 0 16px;white-space:pre-wrap}
+  .row{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:0 0 14px;border-top:1px solid #272727;padding-top:10px}
+  .row h2{grid-column:1/-1;font-size:12px;margin:0;font-weight:700;text-transform:uppercase;letter-spacing:.06em}
+  .row h2 b{color:#dcef6f}
+  figure{margin:0}
+  figcaption{color:#959595;font-size:11px;padding:4px 0}
+  .box{height:300px;display:grid;place-items:center;background:#fff;border-radius:6px;overflow:hidden}
+  .box.t{background:#c9c9c9 conic-gradient(#b4b4b4 25%,transparent 0 50%,#b4b4b4 0 75%,transparent 0) 0 0/20px 20px}
+  .box img,.box canvas{max-width:100%;max-height:300px;display:block}
+</style>
+</head>
+<body>
+<h1>Background remover test</h1>
+<p id="log">Starting</p>
+<div id="out"></div>
+<script type="module">
+// Test page only. Runs an AI subject cut-out (BiRefNet, in this browser) and
+// the automatic line-art method on the same archive images, side by side.
+import { removeBackground, getBrowserCapabilities } from 'https://esm.sh/@bg0/browser@0.1.1';
+
+const log = (t) => { document.getElementById('log').textContent = t; };
+const out = document.getElementById('out');
+const params = new URLSearchParams(location.search);
+const QUERIES = (params.get('q') || 'skull,tiger,roses,eagle,samurai,devil,horse').split(',');
+const PER = Number(params.get('per') || 3);
+const proxied = (u) => '/api/img?u=' + encodeURIComponent(u);
+window.TEST = { done: false, rows: [], caps: getBrowserCapabilities(), errors: [] };
+
+// The same measurements the live remover uses.
+function measure(d) {
+  const hist = new Uint32Array(256); let total = 0;
+  const lumAt = (i) => (d[i] * 299 + d[i + 1] * 587 + d[i + 2] * 114) / 1000;
+  for (let i = 0; i < d.length; i += 16) { hist[lumAt(i) | 0]++; total++; }
+  const at = (f) => { let run = 0; for (let v = 0; v < 256; v++) { run += hist[v]; if (run >= total * f) return v; } return 255; };
+  const dark = at(0.04), light = at(0.9);
+  let r = 0, g = 0, b = 0, n = 0, near = 0, sat = 0;
+  for (let i = 0; i < d.length; i += 16) {
+    const l = lumAt(i);
+    if (l >= light - 6) { r += d[i]; g += d[i + 1]; b += d[i + 2]; n++; }
+    if (l >= light - 22) near++;
+    sat += Math.max(d[i], d[i + 1], d[i + 2]) - Math.min(d[i], d[i + 1], d[i + 2]);
+  }
+  return { dark, light, range: Math.max(1, light - dark), back: n ? [r / n, g / n, b / n] : [255, 255, 255], backShare: near / total, sat: sat / total };
+}
+// A guess at whether an image is line art on a plain background.
+function looksLikeLineArt(m) { return m.light >= 150 && m.backShare >= 0.45; }
+
+function lineCut(src, m, cut) {
+  const d = src.data, o = new ImageData(src.width, src.height), p = o.data;
+  const backLum = (m.back[0] * 299 + m.back[1] * 587 + m.back[2] * 114) / 1000;
+  for (let i = 0; i < d.length; i += 4) {
+    const lum = (d[i] * 299 + d[i + 1] * 587 + d[i + 2] * 114) / 1000;
+    const byColour = Math.max(Math.abs(d[i] - m.back[0]), Math.abs(d[i + 1] - m.back[1]), Math.abs(d[i + 2] - m.back[2]));
+    let t = Math.max(Math.abs(lum - backLum), byColour) / m.range; t = t > 1 ? 1 : t;
+    const a = t <= cut ? 0 : (t - cut) / (1 - cut);
+    const k = Math.max(a, 0.15);
+    for (let c = 0; c < 3; c++) { const v = (d[i + c] - (1 - k) * m.back[c]) / k; p[i + c] = v < 0 ? 0 : v > 255 ? 255 : v; }
+    p[i + 3] = Math.round(a * 255);
+  }
+  return o;
+}
+
+async function loadBlob(url) { const r = await fetch(proxied(url)); if (!r.ok) throw new Error('image ' + r.status); return r.blob(); }
+function fig(caption, node, transparent) {
+  const box = Object.assign(document.createElement('div'), { className: 'box' + (transparent ? ' t' : '') });
+  box.append(node);
+  const f = document.createElement('figure');
+  f.append(box, Object.assign(document.createElement('figcaption'), { textContent: caption }));
+  return f;
+}
+
+async function run() {
+  const items = [];
+  for (const q of QUERIES) {
+    try {
+      const data = await (await fetch('/api/search?q=' + encodeURIComponent(q))).json();
+      const seen = new Set();
+      // One per archive first, so the set is varied.
+      for (const it of data.items) { if (items.length >= QUERIES.length * PER) break; if (seen.has(it.source)) continue; seen.add(it.source); if (seen.size > PER) break; items.push({ q, it }); }
+    } catch (e) { window.TEST.errors.push('search ' + q); }
+  }
+  let n = 0;
+  for (const { q, it } of items) {
+    n++;
+    log(`Image ${n} of ${items.length}: ${it.title}`);
+    const row = Object.assign(document.createElement('div'), { className: 'row' });
+    const head = document.createElement('h2');
+    row.append(head);
+    out.append(row);
+    const rec = { n, title: it.title, source: it.source, type: it.type };
+    try {
+      const blob = await loadBlob(it.thumb);
+      const bmp = await createImageBitmap(blob);
+      const c = document.createElement('canvas'); c.width = bmp.width; c.height = bmp.height;
+      const ctx = c.getContext('2d', { willReadFrequently: true }); ctx.drawImage(bmp, 0, 0);
+      const src = ctx.getImageData(0, 0, c.width, c.height);
+      const m = measure(src.data);
+      rec.lineArt = looksLikeLineArt(m); rec.backShare = +m.backShare.toFixed(2); rec.light = m.light; rec.sat = Math.round(m.sat);
+      const orig = new Image(); orig.src = URL.createObjectURL(blob);
+      row.append(fig('Original', orig, false));
+      const t0 = performance.now();
+      const res = await removeBackground(blob, { quality: 'quality', onProgress: (p) => log(`Image ${n} of ${items.length}: ${p.message} ${Math.round(p.progress * 100)}%`) });
+      rec.aiMs = Math.round(performance.now() - t0); rec.provider = res.provider;
+      const ai = new Image(); ai.src = URL.createObjectURL(res.blob);
+      row.append(fig(`AI subject cut-out (${res.provider}, ${(rec.aiMs / 1000).toFixed(1)}s)`, ai, true));
+      const lc = document.createElement('canvas'); lc.width = c.width; lc.height = c.height;
+      lc.getContext('2d').putImageData(lineCut(src, m, 0.25), 0, 0);
+      row.append(fig('Line-art method, automatic', lc, true));
+      head.innerHTML = `${n}. ${it.title.slice(0, 70).replace(/</g, '&lt;')} / ${it.source} / ${(it.type || 'not labelled').replace(/</g, '&lt;')} / auto pick: <b>${rec.lineArt ? 'LINE ART' : 'AI'}</b> (plain background ${Math.round(m.backShare * 100)}%)`;
+    } catch (e) {
+      rec.error = String(e && e.message || e);
+      head.textContent = `${n}. ${it.title} / failed: ${rec.error}`;
+    }
+    window.TEST.rows.push(rec);
+  }
+  window.TEST.done = true;
+  log('Done: ' + window.TEST.rows.length + ' images. ' + JSON.stringify(window.TEST.caps));
+}
+run().catch((e) => { window.TEST.errors.push(String(e)); window.TEST.done = true; log('Stopped: ' + e); });
+</script>
+</body>
+</html>

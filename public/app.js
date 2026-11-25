@@ -334,10 +334,16 @@ function goHome() {
 // results are merged in, ranked the same way the server ranks them.
 const MET = 'https://collectionapi.metmuseum.org/public/collection';
 const metJson = (u) => fetch(u, { signal: AbortSignal.timeout(5000) }).then((r) => (r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status))));
+let metRest = 0;
 async function metDirect(q, page, n) {
+  if (Date.now() < metRest) throw new Error('resting');
+  const one = (id) => metJson(MET + '/v1/objects/' + id).catch((e) => { if (/403/.test(e.message)) metRest = Date.now() + 60000; return null; });
+  const usable = (o) => o && o.isPublicDomain && o.primaryImageSmall;
   const s = await metJson(MET + '/v1.1/search?hasImages=true&limit=40&offset=' + page * 40 + '&q=' + encodeURIComponent(q));
-  const ids = (s.objectIDs || []).slice(0, n + 6);
-  const objs = await Promise.all(ids.map((id) => metJson(MET + '/v1/objects/' + id).catch(() => null)));
+  const ids = (s.objectIDs || []).slice(0, 36);
+  let objs = await Promise.all(ids.slice(0, n + 6).map(one));
+  // Many records are not public domain; look further only when few were usable.
+  if (objs.filter(usable).length < 8 && ids.length > n + 6 && Date.now() >= metRest) objs = objs.concat(await Promise.all(ids.slice(n + 6).map(one)));
   return objs.filter((o) => o && o.isPublicDomain && o.primaryImageSmall).slice(0, n).map((o) => ({
     id: 'met-' + o.objectID, source: 'The Met', title: o.title || 'Untitled', maker: o.artistDisplayName || '',
     date: o.objectDate || '', type: o.classification || o.objectName || '', thumb: o.primaryImageSmall,

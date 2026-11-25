@@ -51,7 +51,10 @@
 .gfxp .cols{display:flex;gap:24px;align-items:flex-start}
 .gfxp .grid{flex:1 1 0;min-width:0;columns:4 200px;column-gap:16px}
 .gfxp .card{display:block;width:100%;break-inside:avoid;margin:0 0 16px;padding:0;border:1px solid var(--line);border-radius:12px;background:var(--panel);color:var(--ink);text-align:left;overflow:hidden;font:400 12px/1.5 var(--mono)}
-.gfxp .card[aria-pressed=true]{border-color:var(--lime)}
+.gfxp .card.on{border-color:var(--lime)}
+.gfxp .card .shot{position:relative;display:block}
+.gfxp .card .pick{display:block;width:100%;padding:0;border:0;background:none;cursor:pointer}
+.gfxp .card .cap2{cursor:pointer}
 .gfxp .card img{display:block;width:100%;height:auto;background:#111;min-height:120px}
 .gfxp .card span{display:block;padding:0 14px}
 .gfxp .card .t{padding-top:12px;font-weight:700;text-transform:uppercase;letter-spacing:.04em}
@@ -133,11 +136,21 @@
 .gfxp.wall .layout:has(#results:not([hidden])) .filters{display:none}
 .gfxp.wall .grid{columns:7 170px;column-gap:10px}
 .gfxp.wall .card{position:relative;margin:0 0 10px;border:0;border-radius:4px;background:#111}
-.gfxp.wall .card[aria-pressed=true]{outline:2px solid var(--lime);outline-offset:2px}
-.gfxp.wall .card span{position:absolute;left:0;right:0;padding:0 10px;opacity:0;transition:opacity .15s;pointer-events:none}
-.gfxp.wall .card .t{bottom:26px;padding-top:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-shadow:0 1px 6px #000}
-.gfxp.wall .card .m{bottom:8px;padding-bottom:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#d0d0d0;text-shadow:0 1px 6px #000}
-.gfxp.wall .card::after{content:"";position:absolute;inset:auto 0 0 0;height:70px;background:linear-gradient(transparent,rgba(0,0,0,.85));opacity:0;transition:opacity .15s;pointer-events:none}
-.gfxp.wall .card:hover span,.gfxp.wall .card:focus-visible span,.gfxp.wall .card:hover::after,.gfxp.wall .card:focus-visible::after{opacity:1}
-.gfxp.wall .card span{z-index:1}
+.gfxp.wall .card.on{outline:2px solid var(--lime);outline-offset:2px}
+.gfxp.wall .card .cap2{display:none}
 @media (max-width:860px){.gfxp.wall .grid{columns:3 100px}.gfxp .chiprow{gap:10px}}
+
+/* Controls over a result image: save, open the original record, download. */
+.gfxp .ov{position:absolute;z-index:2;opacity:0;transition:opacity .15s;font:700 11px var(--mono);letter-spacing:.1em;text-transform:uppercase;text-decoration:none}
+.gfxp .card:hover .ov,.gfxp .card:focus-within .ov,.gfxp .ov.save.on{opacity:1}
+.gfxp .ov.save{top:10px;right:10px;height:34px;padding:0 14px;border:0;border-radius:10px;background:var(--ink);color:#000}
+.gfxp .ov.save.on{background:var(--lime)}
+.gfxp .ov.open{bottom:10px;left:10px;height:34px;padding:0 12px;border-radius:10px;background:rgba(0,0,0,.78);color:var(--ink);display:flex;align-items:center}
+.gfxp .ov.dl{bottom:10px;right:10px;width:34px;height:34px;border-radius:10px;background:rgba(0,0,0,.78);color:var(--ink);display:grid;place-items:center}
+.gfxp .ov.open:hover,.gfxp .ov.dl:hover{background:#000;color:var(--lime)}
+@media (hover:none){.gfxp .ov{opacity:1}.gfxp .ov.open{display:none}}
+.gfxp .savedbtn{border:1px solid var(--line);border-radius:8px;background:none;color:var(--ink2);height:28px;padding:0 10px;font:700 11px var(--mono);letter-spacing:.12em;text-transform:uppercase}
+.gfxp .savedbtn b{color:var(--ink);font-weight:700;margin-left:6px}
+.gfxp .savedbtn.has{color:var(--ink);border-color:#5a5a5a}
+.gfxp .savedbtn.has b{color:var(--lime)}
+.gfxp .savedbtn:hover{border-color:var(--lime)}

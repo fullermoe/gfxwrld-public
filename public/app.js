@@ -7,7 +7,7 @@
 const GFX_ORIGIN = document.currentScript ? new URL(document.currentScript.src).origin : '';
 const GFX_MARKUP = `
   <section class="panel" aria-label="Search">
-    <div class="ph"><i></i>ARCHIVE_SEARCH @ 100%</div>
+    <div class="ph"><i></i>ARCHIVE_SEARCH @ 100%<span class="spacer"></span><button type="button" class="savedbtn" id="saved">Saved <b id="savedn">0</b></button></div>
     <form id="f">
       <label for="q" class="sr">Search the archives</label>
       <input id="q" type="search" placeholder="Skull, eagle, boxing" autocomplete="off">
@@ -89,6 +89,7 @@ function thumb(it, w, props, onFail) {
 }
 const proxied = (u) => api('/api/img?u=' + encodeURIComponent(u));
 const slug = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 50);
+const downloadLink = (it) => proxied(it.image) + '&dl=1&name=' + encodeURIComponent('gfxwrld-' + (slug(it.title) || it.id));
 const megabytes = (b) => (b >= 1048576 ? (b / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(b / 1024)) + ' KB');
 // The address of the page with the current search and, when one is open, the image.
 function setAddress(itemId) {
@@ -120,6 +121,29 @@ function renderFilters() {
   const active = state.offArchives.size + state.types.size + (state.printReady ? 1 : 0);
   $('fcount').textContent = active ? active + ' ON' : '';
   $('reset').hidden = active === 0;
+}
+
+// Saved images. Kept in this browser only for now (no account needed), so they
+// are still here on the next visit from the same device.
+const saved = new Map();
+try { for (const it of JSON.parse(localStorage.getItem('gfxp-saved') || '[]')) if (it && it.id) saved.set(it.id, it); } catch (e) { /* starts empty */ }
+function paintSavedCount() { $('savedn').textContent = String(saved.size); $('saved').classList.toggle('has', saved.size > 0); }
+function toggleSaved(it) {
+  if (saved.has(it.id)) saved.delete(it.id); else saved.set(it.id, it);
+  try { localStorage.setItem('gfxp-saved', JSON.stringify([...saved.values()].slice(-300))); } catch (e) { /* kept for this visit only */ }
+  paintSavedCount();
+}
+function showSaved() {
+  state.q = ''; state.page = 0; state.more = false;
+  state.items = [...saved.values()].reverse();
+  $('q').value = '';
+  setAddress(null);
+  $('home').hidden = true; $('results').hidden = false;
+  $('rt').textContent = 'Saved';
+  $('detail').hidden = true;
+  update();
+  if (!state.items.length) { $('status').textContent = ''; $('msg').hidden = false; $('msg').textContent = 'Nothing saved yet. Hover an image and press Save.'; }
+  toTop();
 }
 
 // Chips under the search box. On the home page they are starting points; after
@@ -205,7 +229,7 @@ function setWall(on) {
 }
 
 function showDetail(it, card) {
-  document.querySelectorAll('.gfxp .card').forEach((c) => c.setAttribute('aria-pressed', c === card ? 'true' : 'false'));
+  document.querySelectorAll('.gfxp .card').forEach((c) => { c.classList.toggle('on', c === card); const b = c.querySelector('.pick'); if (b) b.setAttribute('aria-pressed', String(c === card)); });
   const known = it.width && it.height;
   const sizeCell = el('span', { textContent: known ? it.width + ' x ' + it.height + ' px' : 'Checking' });
   const row = (k, v) => el('div', { className: 'row' }, [el('span', { textContent: k }), typeof v === 'string' ? el('span', { textContent: v }) : v]);
@@ -217,7 +241,7 @@ function showDetail(it, card) {
     catch (e) { copy.textContent = 'Copy it from the address bar'; }
     setTimeout(() => { copy.textContent = 'Copy link to this image'; }, 2500);
   });
-  const dl = el('a', { className: 'btn p', href: proxied(it.image) + '&dl=1&name=' + encodeURIComponent('gfxwrld-' + (slug(it.title) || it.id)), textContent: 'Download image' });
+  const dl = el('a', { className: 'btn p', href: downloadLink(it), textContent: 'Download image' });
   $('detail').replaceChildren(
     el('div', { className: 'ph' }, [el('i'), it.id.toUpperCase().slice(0, 24) + ' @ 100%']),
     img,
@@ -263,13 +287,27 @@ function renderGrid() {
   $('grid').replaceChildren(...shown.map((it) => {
     // A result whose image will not load is no use to anyone: drop the card.
     const img = thumb(it, 384, { loading: 'lazy' }, () => card.remove());
-    const card = el('button', { type: 'button', className: 'card' }, [
-      img,
+    const open = () => showDetail(it, card);
+    const pick = el('button', { type: 'button', className: 'pick' }, [img]);
+    pick.setAttribute('aria-pressed', 'false');
+    pick.setAttribute('aria-label', 'Details for ' + it.title);
+    pick.addEventListener('click', open);
+    // Shown over the image on hover: save it, open the archive's own record,
+    // or download the file, without opening the panel first.
+    const save = el('button', { type: 'button', className: 'ov save' });
+    const paint = () => { const on = saved.has(it.id); save.classList.toggle('on', on); save.textContent = on ? 'Saved' : 'Save'; save.setAttribute('aria-pressed', String(on)); };
+    paint();
+    save.addEventListener('click', () => { toggleSaved(it); paint(); });
+    const out = el('a', { className: 'ov open', href: it.link, target: '_blank', rel: 'noopener', textContent: 'Open ↗' });
+    out.setAttribute('aria-label', 'Open the original record for ' + it.title);
+    const dl = el('a', { className: 'ov dl', href: downloadLink(it), innerHTML: '<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2v8M4.8 7.2 8 10.4l3.2-3.2M3 13.5h10"/></svg>' });
+    dl.setAttribute('aria-label', 'Download ' + it.title);
+    const cap = el('div', { className: 'cap2' }, [
       el('span', { className: 't', textContent: it.title }),
       el('span', { className: 'm', textContent: it.source + (it.date ? ' / ' + it.date : '') }),
     ]);
-    card.setAttribute('aria-pressed', 'false');
-    card.addEventListener('click', () => showDetail(it, card));
+    cap.addEventListener('click', open);
+    const card = el('div', { className: 'card' }, [el('div', { className: 'shot' }, [pick, save, it.link ? out : '', dl]), cap]);
     cards.set(it.id, card);
     return card;
   }));
@@ -388,6 +426,8 @@ async function loadHome() {
 $('f').addEventListener('submit', (e) => { e.preventDefault(); const q = $('q').value.trim(); if (q) run(q); });
 $('back').addEventListener('click', goHome);
 $('more').addEventListener('click', loadMore);
+$('saved').addEventListener('click', showSaved);
+paintSavedCount();
 $('view').addEventListener('click', () => setWall(!gfxRoot.classList.contains('wall')));
 try { if (localStorage.getItem('gfxp-wall') === '1') setWall(true); } catch (e) { /* default view */ }
 $('reset').addEventListener('click', () => { state.offArchives.clear(); state.types.clear(); state.printReady = false; update(); });

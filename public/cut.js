@@ -136,6 +136,8 @@
     const orig = panel && panel.querySelector('img');
     if (!orig) return;
     const mine = ++job;
+    // The amount removed is fixed at the setting that gave a usable result on the
+    // most images in testing, so there is nothing to adjust.
     const o = { mode: 'Soft', cutoff: 25, ink: 'Original', back: BACK_FOR_INK.Original, invert: false };
     let src = null;
 
@@ -152,8 +154,6 @@
       canvas.getContext('2d').putImageData(out, 0, 0);
     };
 
-    const range = el('input', { type: 'range', min: '5', max: '90', value: String(o.cutoff) });
-    range.addEventListener('input', () => { o.cutoff = Number(range.value); draw(); });
     const inv = el('input', { type: 'checkbox' });
     inv.addEventListener('change', () => { o.invert = inv.checked; draw(); });
     const save = el('button', { type: 'button', className: 'btn p', textContent: 'Download PNG' });
@@ -181,7 +181,6 @@
     const inkSeg = seg('Colour', ['Original', ...Object.keys(INKS)], o.ink, (v) => { o.ink = v; o.back = BACK_FOR_INK[v]; backSeg.set(o.back); draw(); });
     const tools = el('div', { className: 'cuttools', hidden: true }, [
       seg('Style', ['Soft', 'Hard', 'Halftone'], o.mode, (v) => { o.mode = v; draw(); }).node,
-      el('label', { className: 'rng' }, ['How much background to remove', range]),
       inkSeg.node,
       backSeg.node,
       el('label', { className: 'chk' }, [inv, 'Background is dark']),

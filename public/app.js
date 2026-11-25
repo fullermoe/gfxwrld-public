@@ -328,10 +328,68 @@ function goHome() {
   toTop();
 }
 
+// The Met limits how many requests one address may make, and every visitor's
+// search leaves our server from the same few addresses. When the server could
+// not reach the Met, the visitor's own browser asks it directly and the
+// results are merged in, ranked the same way the server ranks them.
+const MET = 'https://collectionapi.metmuseum.org/public/collection';
+const metJson = (u) => fetch(u, { signal: AbortSignal.timeout(5000) }).then((r) => (r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status))));
+async function metDirect(q, page, n) {
+  const s = await metJson(MET + '/v1.1/search?hasImages=true&limit=40&offset=' + page * 40 + '&q=' + encodeURIComponent(q));
+  const ids = (s.objectIDs || []).slice(0, n + 6);
+  const objs = await Promise.all(ids.map((id) => metJson(MET + '/v1/objects/' + id).catch(() => null)));
+  return objs.filter((o) => o && o.isPublicDomain && o.primaryImageSmall).slice(0, n).map((o) => ({
+    id: 'met-' + o.objectID, source: 'The Met', title: o.title || 'Untitled', maker: o.artistDisplayName || '',
+    date: o.objectDate || '', type: o.classification || o.objectName || '', thumb: o.primaryImageSmall,
+    image: o.primaryImage || o.primaryImageSmall, width: null, height: null, rights: 'CC0',
+    link: o.objectURL || 'https://www.metmuseum.org/art/collection/search/' + o.objectID,
+  }));
+}
+function rankMentions(text, q) {
+  const hay = String(text || '').toLowerCase();
+  const words = String(q || '').toLowerCase().split(/\s+/).filter((w) => w.length >= 3);
+  return words.every((w) => {
+    const bases = [w, w.replace(/s$/, ''), w.replace(/es$/, '')];
+    const forms = [...new Set(bases.flatMap((b) => [b, b + 's', b + 'es']))].filter((f) => f.length >= 3).map((f) => f.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+    return new RegExp('\\b(' + forms.join('|') + ')\\b').test(hay);
+  });
+}
+function rankScore(it, q) {
+  const t = String(it.type || '').toLowerCase();
+  const kind = !t ? 1 : /print|engrav|etch|woodcut|woodblock|lithograph|mezzotint|aquatint|poster|draw|chalk|graphite|charcoal|pastel|watercolor|pen and|ink/.test(t) ? 3 : /paint|oil on|tempera|photo|gelatin|albumen|daguerre/.test(t) ? 1 : 0;
+  return (rankMentions(it.title, q) ? 2 : 0) + kind;
+}
+const plainName = (s) => String(s || '').split('(')[0].normalize('NFD').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+function mergeMet(items, met, q) {
+  const mixed = [];
+  let m = 0;
+  items.forEach((it, i) => { mixed.push(it); if (i % 5 === 4 && met[m]) mixed.push(met[m++]); });
+  while (met[m]) mixed.push(met[m++]);
+  const seen = new Set();
+  const unique = mixed.filter((it) => {
+    const keys = [it.image || it.thumb];
+    if (plainName(it.maker)) keys.push(plainName(it.title) + '|' + plainName(it.maker));
+    if (keys.some((k) => seen.has(k))) return false;
+    keys.forEach((k) => seen.add(k));
+    return true;
+  });
+  return unique.map((it) => ({ it, s: rankScore(it, q) })).sort((a, b) => b.s - a.s).map((x) => x.it);
+}
+
 async function fetchPage(q, page) {
-  const r = await fetch(api('/api/search?q=' + encodeURIComponent(String(q).toLowerCase().trim().replace(/\s+/g, ' ')) + (page ? '&page=' + page : '')));
+  const clean = String(q).toLowerCase().trim().replace(/\s+/g, ' ');
+  const r = await fetch(api('/api/search?q=' + encodeURIComponent(clean) + (page ? '&page=' + page : '')));
   const data = await r.json();
   if (!r.ok) throw new Error(data.error || 'Search failed');
+  const metSrc = (data.sources || []).find((s) => s.name === 'The Met');
+  if (metSrc && !metSrc.ok) {
+    try {
+      const met = await metDirect(clean, page || 0, 12);
+      data.items = mergeMet(data.items || [], met, clean);
+      metSrc.ok = true; metSrc.count = met.length; delete metSrc.error;
+      if (met.length) data.more = true;
+    } catch (e) { /* the other archives still answer */ }
+  }
   return data;
 }
 

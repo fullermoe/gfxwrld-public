@@ -62,6 +62,9 @@ export default async function handler(req, res) {
   // stable, so within a tier the archives stay mixed.
   const items = unique.map((it) => ({ it, s: score(it, q) })).sort((a, b) => b.s - a.s).map((x) => x.it);
   const more = page < MAX_PAGE && results.some((s) => s.count > 0);
-  res.setHeader('Cache-Control', 's-maxage=3600, stale-while-revalidate=86400');
+  // A full answer is kept for a day. One with an archive missing is kept only
+  // briefly, so a rate-limited archive comes back on its own.
+  const healthy = results.every((s) => s.ok);
+  res.setHeader('Cache-Control', healthy ? 's-maxage=86400, stale-while-revalidate=604800' : 's-maxage=120, stale-while-revalidate=600');
   res.status(200).json({ q, page, more, sources, items });
 }

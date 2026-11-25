@@ -152,7 +152,7 @@ function showSaved() {
 let starters = [];
 function chip(label, image, go) {
   const b = el('button', { type: 'button', className: 'chip' });
-  if (image) b.append(thumb({ thumb: image }, 384, {}, (img) => img.remove()));
+  if (image) b.append(thumb({ thumb: image }, 192, { decoding: 'async' }, (img) => img.remove()));
   b.append(el('span', { textContent: label }));
   b.addEventListener('click', go);
   return b;
@@ -203,7 +203,7 @@ function renderTrail() {
   $('trailrow').replaceChildren(...trail.map((t) => {
     const b = el('button', { type: 'button', className: 'crumb', title: t.it.title });
     b.setAttribute('aria-label', 'Back to ' + t.it.title);
-    b.append(thumb(t.it, 384, {}, () => b.remove()));
+    b.append(thumb(t.it, 192, { decoding: 'async' }, () => b.remove()));
     b.addEventListener('click', () => {
       if (state.q === t.q && cards.get(t.it.id)) showDetail(t.it, cards.get(t.it.id));
       else run(t.q, t.label, t.it.id);
@@ -286,7 +286,7 @@ function renderGrid() {
   $('more').hidden = !state.more;
   $('grid').replaceChildren(...shown.map((it) => {
     // A result whose image will not load is no use to anyone: drop the card.
-    const img = thumb(it, 384, { loading: 'lazy' }, () => card.remove());
+    const img = thumb(it, 384, { loading: 'lazy', decoding: 'async' }, () => card.remove());
     const open = () => showDetail(it, card);
     const pick = el('button', { type: 'button', className: 'pick' }, [img]);
     pick.setAttribute('aria-pressed', 'false');
@@ -329,7 +329,7 @@ function goHome() {
 }
 
 async function fetchPage(q, page) {
-  const r = await fetch(api('/api/search?q=' + encodeURIComponent(q) + (page ? '&page=' + page : '')));
+  const r = await fetch(api('/api/search?q=' + encodeURIComponent(String(q).toLowerCase().trim().replace(/\s+/g, ' ')) + (page ? '&page=' + page : '')));
   const data = await r.json();
   if (!r.ok) throw new Error(data.error || 'Search failed');
   return data;
@@ -391,7 +391,7 @@ function crateCard(c) {
     // If an image fails, swap in a spare; with none left, leave the empty tile.
     const fill = () => {
       const it = spares.shift();
-      if (it) cell.replaceChildren(thumb(it, 384, {}, fill)); else cell.replaceChildren();
+      if (it) cell.replaceChildren(thumb(it, 192, { loading: 'lazy', decoding: 'async' }, fill)); else cell.replaceChildren();
     };
     fill();
     cells.push(cell);

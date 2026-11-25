@@ -21,6 +21,7 @@
   ],
   "images": {
     "sizes": [
+      192,
       384,
       640
     ],
@@ -52,6 +53,10 @@
       {
         "protocol": "https",
         "hostname": "ids.si.edu"
+      },
+      {
+        "protocol": "https",
+        "hostname": "thumb.wikimedia.org"
       }
     ]
   }

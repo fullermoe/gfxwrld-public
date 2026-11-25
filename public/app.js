@@ -343,7 +343,7 @@ async function metDirect(q, page, n) {
   const ids = (s.objectIDs || []).slice(0, 36);
   let objs = await Promise.all(ids.slice(0, n + 6).map(one));
   // Many records are not public domain; look further only when few were usable.
-  if (objs.filter(usable).length < 8 && ids.length > n + 6 && Date.now() >= metRest) objs = objs.concat(await Promise.all(ids.slice(n + 6).map(one)));
+  if (objs.filter(usable).length < n && ids.length > n + 6 && Date.now() >= metRest) objs = objs.concat(await Promise.all(ids.slice(n + 6).map(one)));
   return objs.filter((o) => o && o.isPublicDomain && o.primaryImageSmall).slice(0, n).map((o) => ({
     id: 'met-' + o.objectID, source: 'The Met', title: o.title || 'Untitled', maker: o.artistDisplayName || '',
     date: o.objectDate || '', type: o.classification || o.objectName || '', thumb: o.primaryImageSmall,

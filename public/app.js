@@ -301,6 +301,9 @@ function renderGrid() {
   $('grid').replaceChildren(...shown.map((it) => {
     // A result whose image will not load is no use to anyone: drop the card.
     const img = thumb(it, 384, { loading: 'lazy', decoding: 'async' }, () => card.remove());
+    // The grey placeholder height only holds the space until the image arrives;
+    // after that the image keeps its own shape, so wide scans are not stretched.
+    img.addEventListener('load', () => { img.classList.add('ld'); if (img.naturalHeight / img.naturalWidth < 0.3) card.classList.add('thin'); }, { once: true });
     const open = () => showDetail(it, card);
     const pick = el('button', { type: 'button', className: 'pick' }, [img]);
     pick.setAttribute('aria-pressed', 'false');

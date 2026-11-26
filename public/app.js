@@ -50,6 +50,20 @@ const GFX_MARKUP = `
 const gfxMount = document.querySelector('[data-gfx-app]');
 if (gfxMount && !document.getElementById('f')) gfxMount.innerHTML = GFX_MARKUP;
 const gfxRoot = document.querySelector('.gfxp') || document.body;
+// Black Friday bar. Shows only while the public sale runs: from midnight
+// Central on Nov 27 until 11:59 PM Pacific on Sunday Nov 29, 2026.
+// Add ?bf=1 to the address to preview it outside those dates.
+(() => {
+  const now = Date.now();
+  const on = (now >= Date.parse('2026-11-27T06:00:00Z') && now < Date.parse('2026-11-30T08:00:00Z')) || /[?&]bf=1\b/.test(location.search);
+  if (!on || !gfxMount || document.getElementById('bfbar')) return;
+  const bar = document.createElement('a');
+  bar.id = 'bfbar';
+  bar.className = 'bfbar';
+  bar.href = 'https://gfxwrld.com/pages/black-friday';
+  bar.innerHTML = '<span class="bft">Black Friday</span><span class="bfm"><b>50% off the Complete Formula Kit.</b> 70% off everything else. Ends Sunday.</span><span class="bfc">Shop the sale<span aria-hidden="true">&rarr;</span></span>';
+  gfxMount.prepend(bar);
+})();
 // Back to the top of the tool, not the top of the host page.
 const toTop = () => { if (gfxRoot.getBoundingClientRect().top < 0) gfxRoot.scrollIntoView(); };
 const $ = (id) => document.getElementById(id);
